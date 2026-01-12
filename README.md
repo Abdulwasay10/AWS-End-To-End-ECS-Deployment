@@ -160,7 +160,7 @@ Example Task Definition JSON:
             "environment": [],
             "environmentFiles": [],
             "essential": true,
-            "image": "389170470781.dkr.ecr.us-east-1.amazonaws.com/travelo-backend:latest",
+            "image": "3891xxxx81.dkr.ecr.us-east-1.amazonaws.com/travelo-backend:latest",
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
