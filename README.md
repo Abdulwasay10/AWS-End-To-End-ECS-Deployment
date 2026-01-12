@@ -5,9 +5,8 @@ Complete guide for deploying a Node.js application on AWS ECS (Elastic Container
 
 ## Architecture Overview
 
-[GoDaddy DNS] → [Application Load Balancer] → [ECS Service] → [ECS Tasks]
-                          ↓                           ↓
-                    [ACM Certificate]          [MongoDB Atlas]
+<img width="542" height="76" alt="Screenshot from 2026-01-12 14-52-32" src="https://github.com/user-attachments/assets/b1a2bd7b-36a5-4bbf-8f5f-c6d29d7b7fe5" />
+
 
 ## Prerequisites
 
