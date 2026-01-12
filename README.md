@@ -1,98 +1,210 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# AWS Project: AWS ECS Deployment (Production Setup)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Complete guide for deploying a Node.js application on AWS ECS (Elastic Container Service) with MongoDB Atlas, Application Load Balancer, and custom domain configuration.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+## Architecture Overview
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+[GoDaddy DNS] → [Application Load Balancer] → [ECS Service] → [ECS Tasks]
+                          ↓                           ↓
+                    [ACM Certificate]          [MongoDB Atlas]
 
-## Project setup
+## Prerequisites
 
-```bash
-$ yarn install
+1. AWS Account with appropriate permissions
+2. AWS CLI installed and configured
+3. Docker installed locally
+4. MongoDB Atlas account
+5. Domain registered (e.g., GoDaddy)
+6. Node.js application ready for deployment
+
+## Step 1: MongoDB Atlas Setup
+
+1.1 Create MongoDB Cluster
+
+1. Sign up/login to MongoDB Atlas with provided credentials
+2. Create a new cluster
+3. Create a database user with appropriate permissions
+4. Whitelist IP addresses (0.0.0.0/0 for development, specific IPs for production)
+
+1.2 Get Connection Strings
+Copy both connection strings:
+
+1. Shell connection: For command-line access
+2. MongoDB Compass: For GUI access
+
+1.3 Test Connectivity
+Verify connection using MongoDB Compass or mongosh.
+
+1.4 Update Environment Variables
+Add to your .env file:
+
+  ```bash
+  DB_URI="mongodb+srv://<username>:<password>@<cluster-url>/<database-name>"
+  ```
+
+## Step 2: Docker Configuration
+
+2.1 Create Dockerfile (Given in repo)
+
+2.2 Build Docker Image Locally
+
+  ```bash
+  docker build -t travelo-backend .
+  ```
+
+2.3 Test Locally
+
+  ```bash
+  docker run -p 3000:3000 --env-file .env travelo-backend
+  ```
+
+2.4 Verify Application
+Check logs:
+
+  ```bash
+  docker logs travelo-backend
+  ```
+Test endpoint
+
+curl http://localhost:3000/api/v1
+(Should return HTTP 200)
+
+## Step 3: Push Image to ECR
+
+3.1 Create ECR Repository
+Via AWS Console: Navigate to ECR and create repository
+Via CLI:
+
+  ```bash
+  aws ecr create-repository \
+  --repository-name <repo-name> \
+  --region <region>
+  ```
+
+3.2 Configure AWS CLI
+
+  ```bash
+  aws configure
+  ```
+Enter your:
+
+. AWS Access Key ID
+. AWS Secret Access Key
+. Default region
+. Output format
+
+3.3 Authenticate Docker to ECR
+
+  ```bash
+  aws ecr get-login-password --region <region> | \
+  docker login --username AWS --password-stdin \
+  <aws_account_id>.dkr.ecr.<region>.amazonaws.com
+  ```
+
+3.4 Tag Local Image
+
+  ```bash
+  docker tag <local-image>:<tag> \
+  <aws_account_id>.dkr.ecr.<region>.amazonaws.com/<repo-name>:<tag>
+  ```
+
+3.5 Push Image to ECR
+
+  ```bash
+  docker push <aws_account_id>.dkr.ecr.<region>.amazonaws.com/<repo-name>:<tag>
+  ```
+
+3.6 Verify Image Upload
+Via Console: Check ECR repository in AWS Console
+Via CLI:
+
+  ```bash
+  aws ecr list-images \
+  --repository-name <repo-name> \
+  --region <region>
+  ```
+
+## Step 4: ECS Cluster and Task Definition
+
+4.1 Create ECS Cluster
+Via AWS Console: Navigate to ECS and create cluster
+Via CLI:
+
+  ```bash
+  aws ecs create-cluster \
+  --cluster-name my-ecs-cluster \
+  --region <region>
+  ```
+
+4.2 Create Task Definition
+Task definition includes:
+
+- Container image URI: ECR image URL
+- Port mappings: Container port 3000 → Host port 3000
+- Environment variables: Database connection strings, API keys, etc.
+- CPU and Memory: e.g., 512 CPU units, 1024 MB memory
+- Logging configuration: CloudWatch Logs
+- Launch type: Fargate (serverless) or EC2
+- Network mode: awsvpc (for Fargate)
+- Task execution role: IAM role for ECS tasks
+
+Example Task Definition JSON:
+
+  ```bash
+  {
+    "family": "travelo-backend",
+    "containerDefinitions": [
+        {
+            "cpu": 0,
+            "environment": [],
+            "environmentFiles": [],
+            "essential": true,
+            "image": "389170470781.dkr.ecr.us-east-1.amazonaws.com/travelo-backend:latest",
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/travelo-backend",
+                    "awslogs-create-group": "true",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                },
+                "secretOptions": []
+            },
+            "mountPoints": [],
+            "name": "travelo-backend",
+            "portMappings": [
+                {
+                    "appProtocol": "http",
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "name": "container-port",
+                    "protocol": "tcp"
+                }
+            ],
+            "systemControls": [],
+            "ulimits": [],
+            "volumesFrom": []
+        }
+    ],
+    "executionRoleArn": "arn:aws:iam::389170470781:role/ecsTaskExecutionRole",
+    "networkMode": "awsvpc",
+    "volumes": [],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024",
+    "runtimePlatform": {
+        "cpuArchitecture": "X86_64",
+        "operatingSystemFamily": "LINUX"
+    },
+    "enableFaultInjection": false
+}
 ```
 
-## Compile and run the project
+<img width="1366" height="768" alt="Screenshot from 2025-11-05 23-33-32" src="https://github.com/user-attachments/assets/6545dd24-cd47-49ed-823d-955896679998" />
 
-```bash
-# development
-$ yarn run start
 
-# watch mode
-$ yarn run start:dev
 
-# production mode
-$ yarn run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
